@@ -56,6 +56,27 @@ elif plate == 'plate tp fidamc':
                     [0.00,      146.66],
                     [0.0,       73.33]],dtype=float)/1000 # in meters
 
+elif plate == 'coupon ansys':
+    transducers = np.array([[0.04,0.01],
+                            [0.04,0.03],
+                            [0.04,0.05],
+                            [0.15,0.01],
+                            [0.15,0.03],
+                            [0.15,0.05],
+                            [0.26,0.01],
+                            [0.26,0.03],
+                            [0.26,0.05]],dtype=float) # in meters
+
+elif plate == 'aluminum 50x75':
+    transducers = np.array([[0.00,0.00],
+                            [0.21,0.00],
+                            [0.42,0.00],
+                            [0.42,0.335],
+                            [0.42,0.67],
+                            [0.21,0.67],
+                            [0.00,0.67],
+                            [0.00,0.335]],dtype=float) # in meters
+
 N = len(transducers)
 Fs = float(input('Input Sampling Frequency: '))
 
@@ -108,110 +129,137 @@ elif typefile == 'mat':
     dataL = dataset['data']
     samples = int(len(dataL))
 
-t0 = 0e-6
-anaw = np.arange(round(t0*Fs),samples)
+tmin=5e-5
+tmax=5e-5
+nt=1
+tt = np.linspace(tmin,tmax,nt)
+t0 = 62.5e-6
+t0 = 3.75e-5
+countfig = 0
+wait_for_click = False
+v = 5500
+anaend = round(3.5/300000*Fs)
 
-norder = 4;
-flow = 200e3
-fhigh = 1500e3
+for t0 in tt:
+    anaw = np.arange(round(t0*Fs),round(t0*Fs)+anaend)
+    anaw = np.arange(round(t0*Fs),round(t0*Fs)+anaend)
+    anaw = np.arange(round(t0*Fs),samples)
+    anaw = np.arange(round(t0*Fs),samples)
+    
+    norder = 4;
+    flow = 100e3
+    fhigh = 1500e3
+    
+    b, a = signal.butter(norder, [flow,fhigh], btype='band', analog=False, output='ba', fs=Fs)
+    
+    def butter_bandpass(lowcut, highcut, fs, order):
+        return signal.butter(order, [lowcut, highcut], fs=fs, btype='band')
+    
+    def butter_bandpass_filter(data, lowcut, highcut, fs, order=norder):
+        b, a = butter_bandpass(lowcut, highcut, fs, order)
+        y = signal.lfilter(b, a, data)
+        return y
+    
+    DI1 = np.zeros((N,N))
+    DI2 = np.zeros((N,N))
+    DI3 = np.zeros((N,N))
+    
+    filtering = False
+    if filtering == True:
+        dataLf = np.zeros(dataL.shape)
+        dataHf = np.zeros(dataH.shape)
+    
+    for i in range(N):
+        for j in range(N):
+            if (i!=j):
+                
+                dist = np.sqrt((transducers[i][0]-transducers[j][0])**2+(transducers[i][1]-transducers[j][1])**2)
 
-b, a = signal.butter(norder, [flow,fhigh], btype='band', analog=False, output='ba', fs=Fs)
+                anaw = np.arange(round(dist/v*Fs),round(dist/v*Fs)+anaend)
 
-def butter_bandpass(lowcut, highcut, fs, order):
-    return signal.butter(order, [lowcut, highcut], fs=fs, btype='band')
-
-def butter_bandpass_filter(data, lowcut, highcut, fs, order=norder):
-    b, a = butter_bandpass(lowcut, highcut, fs, order)
-    y = signal.lfilter(b, a, data)
-    return y
-
-DI1 = np.zeros((N,N))
-DI2 = np.zeros((N,N))
-DI3 = np.zeros((N,N))
-
-filtering = True
-if filtering == True:
-    dataLf = np.zeros(dataL.shape)
-    dataHf = np.zeros(dataH.shape)
-
-for i in range(N):
-    for j in range(N):
-        if (i!=j):
-            
-            if filtering == False:
-                sL = dataL[:,i,j]
-                sH = dataH[:,i,j]
-            else:
-                dataLf[:,i,j] = butter_bandpass_filter(dataL[:,i,j],flow,fhigh,Fs,norder)
-                dataHf[:,i,j] = butter_bandpass_filter(dataH[:,i,j],flow,fhigh,Fs,norder)
-                sL = dataLf[:,i,j]
-                sH = dataHf[:,i,j]
-
-            DI1[i,j] = 1-np.corrcoef(sL[anaw],sH[anaw])[0][1]
-            DI2[i,j] = sum(np.power((sL[anaw]-sH[anaw]),2))
-
-DI = DI2
-
-t = np.arange(0,samples/Fs,1/Fs)
-tr = 1
-rc = 7
-# plt.figure(1)
-plt.plot(t[anaw],dataL[anaw,tr,rc],color='r',label='High')
-plt.plot(t[anaw],dataH[anaw,tr,rc],color='b',label='Low')
-plt.xlabel("Time")
-plt.ylabel("Voltage")
-plt.title("Lamb wave signals")
-plt.legend()
-# plt.show(block=False)
-plt.show()
-
-if filtering == True:
-    plt.plot(t[anaw],dataLf[anaw,tr,rc],color='r',label='High')
-    plt.plot(t[anaw],dataHf[anaw,tr,rc],color='b',label='Low')
+                if filtering == False:
+                    sL = dataL[:,i,j]
+                    sH = dataH[:,i,j]
+                else:
+                    dataLf[:,i,j] = butter_bandpass_filter(dataL[:,i,j],flow,fhigh,Fs,norder)
+                    dataHf[:,i,j] = butter_bandpass_filter(dataH[:,i,j],flow,fhigh,Fs,norder)
+                    sL = dataLf[:,i,j]
+                    sH = dataHf[:,i,j]
+                
+                DI1[i,j] = 1-np.corrcoef(sL[anaw],sH[anaw])[0][1]
+                DI2[i,j] = sum(np.power((sL[anaw]-sH[anaw]),2))
+    
+    DI = DI2
+    
+    t = np.arange(0,samples/Fs,1/Fs)
+    tr = 1
+    rc = 4
+    # plt.figure(1)
+    plt.plot(t[anaw],dataL[anaw,tr,rc],color='r',label='High')
+    plt.plot(t[anaw],dataH[anaw,tr,rc],color='b',label='Low')
     plt.xlabel("Time")
     plt.ylabel("Voltage")
-    plt.title("FILTERED Lamb wave signals")
+    plt.title("Lamb wave signals")
     plt.legend()
+    # plt.show(block=False)
     plt.show()
-
-x_grid=np.linspace(xmin,xmax,Nx);
-y_grid=np.linspace(ymin,ymax,Ny);
-beta = 1.025
-result = np.zeros((Nx,Ny))
-activation = [1,1,1,1,1,1,1,1,1,1,1,1]
-#reference = [1,2,3,4,5,6,7,8,9,0,1,2]
-
-print('Processing RAPID...')
-for i in range(Nx):
-    for j in range(Ny):
-        pxy = 0;
-        for tr in range (N):
-            for rc in range(N):
-                if (activation[tr]==1)&(activation[rc]==1)&(tr!=rc):
-                
-                    p = [x_grid[i],y_grid[j]]
-                    
-                    ptp = [transducers[tr,0],transducers[tr,1]]
-                    prp = [transducers[rc,0],transducers[rc,1]]
-                    
-                    dtp=eu2dist(p,ptp);                         
-                    dpr=eu2dist(p,prp);
-                    dtr=eu2dist(ptp,prp);
-                    
-                    Etr = (dtp+dpr)/dtr;
-                    
-                    if Etr>=beta:
-                        Rtr=beta
-                    else:
-                        Rtr=Etr
-                           
-                    pxy = pxy + DI[tr,rc]*((beta-Rtr)/(beta-1));    #Actualización del valor de Pxy
     
-        result[i,j] = pxy
+    if filtering == True:
+        plt.plot(t[anaw],dataLf[anaw,tr,rc],color='r',label='High')
+        plt.plot(t[anaw],dataHf[anaw,tr,rc],color='b',label='Low')
+        plt.xlabel("Time")
+        plt.ylabel("Voltage")
+        plt.title("FILTERED Lamb wave signals")
+        plt.legend()
+        plt.show()
+    
+    x_grid=np.linspace(xmin,xmax,Nx);
+    y_grid=np.linspace(ymin,ymax,Ny);
+    beta = 1.025
+    result = np.zeros((Nx,Ny))
+    activation = [1,1,1,1,1,1,1,1,1,1,1,1]
+    #reference = [1,2,3,4,5,6,7,8,9,0,1,2]
+    
+    print('Processing RAPID...')
+    for i in range(Nx):
+        for j in range(Ny):
+            pxy = 0;
+            for tr in range (N):
+                for rc in range(N):
+                    if (activation[tr]==1)&(activation[rc]==1)&(tr!=rc):
+                    
+                        p = [x_grid[i],y_grid[j]]
+                        
+                        ptp = [transducers[tr,0],transducers[tr,1]]
+                        prp = [transducers[rc,0],transducers[rc,1]]
+                        
+                        dtp=eu2dist(p,ptp);                         
+                        dpr=eu2dist(p,prp);
+                        dtr=eu2dist(ptp,prp);
+                        
+                        Etr = (dtp+dpr)/dtr;
+                        
+                        if Etr>=beta:
+                            Rtr=beta
+                        else:
+                            Rtr=Etr
+                               
+                        pxy = pxy + DI[tr,rc]*((beta-Rtr)/(beta-1));    #Actualización del valor de Pxy
         
-print('Plotting...')
-
-result_oriented =np.flip(result.transpose(),axis=0)
-plt.figure(2)
-plt.imshow(result_oriented)
-plt.show()
+            result[i,j] = pxy
+            
+    print('Plotting...')
+    
+    countfig=+1
+    
+    result_oriented =np.flip(result.transpose(),axis=0)
+    plt.figure(countfig)
+    plt.imshow(result_oriented)
+    plt.show()
+    plt.jet()
+    
+    if wait_for_click==True:
+        a = input('').split(" ")[0]
+        print(a)
+    
+    
