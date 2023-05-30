@@ -262,4 +262,11 @@ for t0 in tt:
         a = input('').split(" ")[0]
         print(a)
     
-    
+    mm = 600
+    fbin = np.arange(0,Fs,Fs/samples)
+    plt.plot(fbin[0:mm],abs(np.fft.fft(dataL[:,tr,rc]))[0:mm])
+    plt.plot(fbin[0:mm],abs(np.fft.fft(dataH[:,tr,rc]))[0:mm])
+
+
+
+
